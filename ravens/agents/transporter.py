@@ -36,13 +36,13 @@ class TransporterAgent:
     self.total_steps = 0
     self.crop_size = 64
     self.n_rotations = n_rotations
-    self.pix_size = 0.003125
-    self.in_shape = (320, 160, 6)
+    self.pix_size = 0.015625 # FleX cam#0.003125
+    self.in_shape = (128, 288, 6)#(320, 160, 6) # TODO - THIS IS NOT USED
     self.cam_config = cameras.RealSenseD415.CONFIG
     self.models_dir = os.path.join(root_dir, 'checkpoints', self.name)
-    self.bounds = np.array([[0.25, 0.75], [-0.5, 0.5], [0, 0.28]])
+    self.bounds = np.array([[0.25, 0.75], [-0.5, 0.5], [0, 0.28]]) #TODO - bounds de softgym - ver utils get_height.
 
-  def get_image(self, obs):
+  def get_image(self, obs, sgym=True):
     """Stack color and height images image."""
 
     # if self.use_goal_image:
@@ -52,13 +52,18 @@ class TransporterAgent:
     #   assert input_image.shape[2] == 12, input_image.shape
 
     # Get color and height maps from RGB-D images.
-    cmap, hmap = utils.get_fused_heightmap(
-        obs, self.cam_config, self.bounds, self.pix_size)
+    # Obs from Softgym do not need fusing
+    if sgym:
+      cmap = obs['color']
+      hmap = obs['depth']
+    else:
+      cmap, hmap = utils.get_fused_heightmap(
+          obs, self.cam_config, self.bounds, self.pix_size)
     img = np.concatenate((cmap,
                           hmap[Ellipsis, None],
                           hmap[Ellipsis, None],
                           hmap[Ellipsis, None]), axis=2)
-    assert img.shape == self.in_shape, img.shape
+    #assert img.shape == self.in_shape, img.shape  # until we figure out what in_shape is
     return img
 
   def get_sample(self, dataset, augment=True):
@@ -83,9 +88,9 @@ class TransporterAgent:
     # Get training labels from data sample.
     p0_xyz, p0_xyzw = act['pose0']
     p1_xyz, p1_xyzw = act['pose1']
-    p0 = utils.xyz_to_pix(p0_xyz, self.bounds, self.pix_size)
+    p0 = utils.xyz_to_pix_sg(p0_xyz, self.pix_size)
     p0_theta = -np.float32(utils.quatXYZW_to_eulerXYZ(p0_xyzw)[2])
-    p1 = utils.xyz_to_pix(p1_xyz, self.bounds, self.pix_size)
+    p1 = utils.xyz_to_pix_sg(p1_xyz, self.pix_size)
     p1_theta = -np.float32(utils.quatXYZW_to_eulerXYZ(p1_xyzw)[2])
     p1_theta = p1_theta - p0_theta
     p0_theta = 0
@@ -185,8 +190,8 @@ class TransporterAgent:
 
     # Pixels to end effector poses.
     hmap = img[:, :, 3]
-    p0_xyz = utils.pix_to_xyz(p0_pix, hmap, self.bounds, self.pix_size)
-    p1_xyz = utils.pix_to_xyz(p1_pix, hmap, self.bounds, self.pix_size)
+    p0_xyz = utils.pix_to_xyz_sg(p0_pix, hmap, self.pix_size)
+    p1_xyz = utils.pix_to_xyz_sg(p1_pix, hmap, self.pix_size)
     p0_xyzw = utils.eulerXYZ_to_quatXYZW((0, 0, -p0_theta))
     p1_xyzw = utils.eulerXYZ_to_quatXYZW((0, 0, -p1_theta))
 
